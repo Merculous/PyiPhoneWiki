@@ -1,42 +1,48 @@
 #!/usr/bin/env python3
 
+import asyncio
 import sys
-import time
-from urllib.error import HTTPError
-from urllib.request import urlopen
 
-
-def requestFromURL(url, read):
-    name = 'requestFromURL'
-    try:
-        r = urlopen(url)
-    except HTTPError as e:
-        if e.code == 404:
-            print(f'[{name}] {url} not found!')
-        if e.code == 429:
-            wait = int(e.headers['Request-After'])
-            print(f'[{name}] server is asking to wait!')
-            print(f'[{name}] waiting {wait:.4f} seconds...')
-            time.sleep(wait)
-    except ValueError:
-        raise
-    else:
-        if not read:
-            return r
-        else:
-            return r.read().decode()
-    finally:
-        print(f'[{name}] requesting from {url}')
+from aiohttp import ClientSession
 
 
 class Wiki:
-    def __init__(self):
-        pass
+    def __init__(self, session) -> None:
+        self.session = session
+
+    async def readFromURL(self, url):
+        async with self.session.get(url) as r:
+            if r.status == 200:
+                return await r.text()
+            else:
+                raise ValueError(f'Got status code: {r.status}!')
+
+    async def readModels(self):
+        url = 'https://www.theiphonewiki.com/w/index.php?title=Models&action=raw'
+        data = await self.readFromURL(url)
+        data = data.splitlines()
+        info = {}
+        for i, line in enumerate(data):
+            if '== [[' in line:
+                if '|' in line:
+                    name = line.split('|')[1].replace(']] ==', '')
+                    info[name] = {}
+                    info[name]['start'] = i
+                else:
+                    name = line.replace('== [[', '').replace(']] ==', '')
+                    info[name] = {}
+                    info[name]['start'] = i
+
+            if line == '|}':
+                info[name]['end'] = i
+                info[name]['data'] = data[info[name]
+                                          ['start']:info[name]['end']+1]
 
 
-def main(args):
-    argc = len(args)
-
+async def main(args: tuple) -> None:
+    async with ClientSession() as session:
+        w = Wiki(session)
+        await w.readModels()
 
 if __name__ == '__main__':
-    main(tuple(sys.argv))
+    asyncio.run(main(tuple(sys.argv)))
